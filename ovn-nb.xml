@@ -4280,10 +4280,11 @@ or
         </p>
 
         <p>
-          The auto-discovery uses the kernel ethtool interface to identify
-          the veth peer. If the bound interface is not a veth device, or if
-          auto-discovery fails for any reason, the system will fallback to
-          learning routes from all interfaces on the Logical Router Port.
+          The auto-discovery feature uses the ethtool interface to identify
+          the veth peer and is only available on Linux systems.
+          If the bound interface is not a veth device or if auto-discovery
+          fails for any reason, the system will fallback to learning routes
+          from all interfaces on the Logical Router Port.
         </p>
       </column>
 

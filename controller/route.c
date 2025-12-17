@@ -17,12 +17,12 @@
 
 #include <config.h>
 
-#include <errno.h>
+#include <net/if.h>
+
+#ifdef __linux__
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#endif
 
 #include "vswitch-idl.h"
 #include "openvswitch/hmap.h"
@@ -35,6 +35,7 @@
 #include "ha-chassis.h"
 #include "local_data.h"
 #include "route.h"
+#include "socket-util.h"
 
 #include "route-table.h"
 
@@ -43,9 +44,10 @@ VLOG_DEFINE_THIS_MODULE(exchange);
 #define PRIORITY_DEFAULT 1000
 #define PRIORITY_LOCAL_BOUND 100
 
+#ifdef __linux__
 /* Discover the veth peer interface name for a given interface.
- * Uses ethtool stats to get the peer_ifindex, then if_indextoname to
- * get the peer interface name.
+ * Uses ethtool ioctl to verify the device is a veth and get peer_ifindex,
+ * then if_indextoname to get the peer interface name.
  * Returns the peer interface name, or NULL if not found or on error.
  * Caller must free the returned string. */
 static char *
@@ -53,18 +55,11 @@ find_veth_peer(const char *ifname)
 {
     struct ifreq ifr;
     struct ethtool_drvinfo drvinfo;
-    int sock, peer_ifindex;
+    int peer_ifindex;
     char *peer_name = NULL;
+    int error;
 
     if (!ifname) {
-        return NULL;
-    }
-
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_DBG_RL(&rl, "veth peer auto-discovery: "
-            "Failed to create socket: %s", ovs_strerror(errno));
         return NULL;
     }
 
@@ -75,12 +70,11 @@ find_veth_peer(const char *ifname)
     drvinfo.cmd = ETHTOOL_GDRVINFO;
     ifr.ifr_data = (void *)&drvinfo;
 
-    if (ioctl(sock, SIOCETHTOOL, &ifr) < 0) {
-        close(sock);
+    error = af_inet_ioctl(SIOCETHTOOL, &ifr);
+    if (error) {
         return NULL;
     }
     if (strcmp(drvinfo.driver, "veth") != 0) {
-        close(sock);
         return NULL;
     }
 
@@ -95,14 +89,12 @@ find_veth_peer(const char *ifname)
     req.stats.n_stats = 1;
     ifr.ifr_data = (void *)&req.stats;
 
-    if (ioctl(sock, SIOCETHTOOL, &ifr) < 0) {
-        close(sock);
+    error = af_inet_ioctl(SIOCETHTOOL, &ifr);
+    if (error) {
         return NULL;
     }
 
     peer_ifindex = (int) req.data[0];
-    close(sock);
-
     if (peer_ifindex <= 0) {
         return NULL;
     }
@@ -116,6 +108,14 @@ find_veth_peer(const char *ifname)
     peer_name = xstrdup(peer_ifname);
     return peer_name;
 }
+#else
+/* Non-Linux platforms do not support veth peer discovery */
+static char *
+find_veth_peer(const char *ifname OVS_UNUSED)
+{
+    return NULL;
+}
+#endif
 
 static bool
 route_exchange_relevant_port(const struct sbrec_port_binding *pb)

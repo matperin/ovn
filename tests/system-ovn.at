@@ -19312,12 +19312,15 @@ AT_CLEANUP
 
 OVN_FOR_EACH_NORTHD([
 AT_SETUP([dynamic-routing - routing-protocol-redirect auto-discovery])
+AT_SKIP_IF([test "$(uname -s)" != "Linux"])
 
 vni=1337
 VRF_RESERVE([$vni])
 
 # This test validates that automatic veth peer discovery works with
 # routing-protocol-redirect option and that routes can be learned.
+# Note: This feature is Linux-only as it relies on ethtool to query
+# veth peers.
 #
 # Topology:
 #  +----------+
