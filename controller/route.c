@@ -79,9 +79,9 @@ find_veth_peer(const char *ifname)
     }
 
     /* Get peer_ifindex from ethtool stats */
-    struct {
+    union {
         struct ethtool_stats stats;
-        uint64_t data[1];
+        uint64_t data[2];  /* stats header + data element */
     } req;
 
     memset(&req, 0, sizeof req);
@@ -94,7 +94,7 @@ find_veth_peer(const char *ifname)
         return NULL;
     }
 
-    peer_ifindex = (int) req.data[0];
+    peer_ifindex = (int) req.stats.data[0];
     if (peer_ifindex <= 0) {
         return NULL;
     }
